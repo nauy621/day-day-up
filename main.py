@@ -3,19 +3,37 @@ import datetime
 import json
 
 # ======================
-# 🔧 读取配置
+# 🧪 测试模式（关键）
+# True = 强制跑12:00内容
+# False = 正常运行
+# ======================
+TEST_MODE = True
+
+# ======================
+# 上海时间
+# ======================
+now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+
+hour = now.hour
+weekday = now.weekday()
+
+# ======================
+# 🧠 强制测试逻辑
+# ======================
+if TEST_MODE:
+    print("🧪 TEST MODE ON → 强制模拟12:00")
+    hour = 12
+
+# ======================
+# PushPlus配置
 # ======================
 with open("config.json","r") as f:
     config = json.load(f)
 
 TOKEN = config["pushplus_token"]
 
-now = datetime.datetime.now()
-hour = now.hour
-weekday = now.weekday()
-
 # ======================
-# 🧠 内容生成系统
+# 内容系统
 # ======================
 def get_content(hour, weekday):
 
@@ -25,19 +43,18 @@ def get_content(hour, weekday):
 🍳 早餐提醒
 
 - 热干面 / 蒸饺
-- 鸡蛋 1-2个
-- 黑咖啡（饭后）
-- 维生素
+- 鸡蛋
+- 黑咖啡
 
-⚠️ 不要空腹咖啡（防发飘）
+⚠️ 不要空腹咖啡
 """
 
     # 🍽 午餐
     if 11 <= hour < 13:
         return """
-🍽 午餐
+🍽 午餐时间（TEST触发）
 
-- 轻食 / 金枪鱼谷物碗 / 便当
+- 金枪鱼谷物碗 / 轻食
 
 ⚠️ 保持蛋白摄入
 """
@@ -55,11 +72,8 @@ def get_content(hour, weekday):
         return f"""
 🏋️ 今日训练（周{weekday}）
 
-- 背 / 腿 / 核心（周期训练）
+- 背 / 腿 / 核心
 - 最后一组力竭
-- 不要每组爆
-
-🔥 状态：执行中
 """
 
     # 🌙 恢复
@@ -70,8 +84,6 @@ def get_content(hour, weekday):
 - 肠粉
 - 蛋白粉
 - 肌酸
-
-⚠️ 恢复 + 防掉肌肉
 """
 
     return None
@@ -79,31 +91,20 @@ def get_content(hour, weekday):
 
 content = get_content(hour, weekday)
 
-# ======================
-# 🚨 防空内容
-# ======================
 if not content:
-    print("❌ NO CONTENT - NO PUSH")
+    print("❌ NO CONTENT")
     exit()
 
 # ======================
-# 🚀 PushPlus 推送
+# 🚀 推送
 # ======================
 url = "https://www.pushplus.plus/send"
 
-print("🔥 START PUSH")
-print("TOKEN:", TOKEN)
-print("HOUR:", hour)
+r = requests.get(url, params={
+    "token": TOKEN,
+    "title": "🔥 V10 测试推送",
+    "content": content
+})
 
-try:
-    r = requests.get(url, params={
-        "token": TOKEN,
-        "title": "🔥 V10.2 健身提醒系统",
-        "content": content
-    })
-
-    print("STATUS:", r.status_code)
-    print("RESPONSE:", r.text)
-
-except Exception as e:
-    print("❌ ERROR:", str(e))
+print("STATUS:", r.status_code)
+print("RESPONSE:", r.text)
