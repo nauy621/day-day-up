@@ -91,8 +91,8 @@ def push(content):
     "content": content
 })
 
-print("STATUS:", r.status_code)
-print("RESPONSE:", r.text)
+    print("STATUS:", r.status_code)
+    print("RESPONSE:", r.text)
 
     print(r.text)
 
