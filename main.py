@@ -86,10 +86,13 @@ def push(content):
     url = "https://www.pushplus.plus/send"
 
     r = requests.get(url, params={
-        "token": TOKEN,
-        "title": "🔥 V10.1 AI健身系统",
-        "content": content
-    })
+    "token": TOKEN,
+    "title": "🔥 V10.1 AI健身系统",
+    "content": content
+})
+
+print("STATUS:", r.status_code)
+print("RESPONSE:", r.text)
 
     print(r.text)
 
