@@ -7,7 +7,7 @@ import json
 # True = 强制跑12:00内容
 # False = 正常运行
 # ======================
-TEST_MODE = True
+TEST_MODE = False
 
 # ======================
 # 上海时间
