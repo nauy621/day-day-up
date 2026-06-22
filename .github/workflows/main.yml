@@ -32,4 +32,13 @@ jobs:
 
       - run: pip install requests
 
+      - name: Print trigger time
+        run: |
+          echo "UTC: $(date -u '+%F %T %Z')"
+          TZ=Asia/Shanghai date '+Shanghai: %F %T %Z'
+          echo "Schedule: $GITHUB_EVENT_SCHEDULE"
+
       - run: python main.py
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
