@@ -1,32 +1,55 @@
-name: fitness-v10-shanghai
+name: daily-fitness-reminder
 
 on:
   workflow_dispatch:
+    inputs:
+      reminder:
+        description: "Manual reminder to send"
+        required: true
+        default: "test"
+        type: choice
+        options:
+          - test
+          - breakfast
+          - lunch
+          - snack
+          - workout
+          - recovery
 
   schedule:
-    # 🥣 08:30 上海时间
-    - cron: "30 0 * * *"
+    # 08:30 Shanghai, valid window 08:15-08:45
+    - cron: "15-45/5 0 * * *"
 
-    # 🍽 12:00 上海时间
-    - cron: "0 4 * * *"
+    # 12:00 Shanghai, valid window 11:45-12:15
+    - cron: "45-55/5 3 * * *"
+    - cron: "0-15/5 4 * * *"
 
-    # ⚡ 15:30 上海时间
-    - cron: "30 7 * * *"
+    # 15:30 Shanghai, valid window 15:15-15:45
+    - cron: "15-45/5 7 * * *"
 
-    # 🏋️ 18:00 上海时间
-    - cron: "0 10 * * *"
+    # 18:00 Shanghai, valid window 17:45-18:15
+    - cron: "45-55/5 9 * * *"
+    - cron: "0-15/5 10 * * *"
 
-    # 🌙 21:00 上海时间
-    - cron: "0 13 * * *"
+    # 21:00 Shanghai, valid window 20:45-21:15
+    - cron: "45-55/5 12 * * *"
+    - cron: "0-15/5 13 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-fitness-reminder
+  cancel-in-progress: false
 
 jobs:
   run:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
@@ -36,9 +59,25 @@ jobs:
         run: |
           echo "UTC: $(date -u '+%F %T %Z')"
           TZ=Asia/Shanghai date '+Shanghai: %F %T %Z'
-          echo "Schedule: $GITHUB_EVENT_SCHEDULE"
+          echo "Event: $GITHUB_EVENT_NAME"
+          echo "Manual reminder: $MANUAL_REMINDER"
 
       - run: python main.py
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
-          GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          MANUAL_REMINDER: ${{ github.event.inputs.reminder }}
+
+      - name: Save reminder state
+        if: success()
+        run: |
+          if ! git diff --quiet -- state.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state.json
+            git commit -m "chore: record reminder state"
+            git pull --rebase
+            git push
+          else
+            echo "No state change."
+          fi
