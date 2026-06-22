@@ -1,3 +1,12 @@
 {
-  "last_intensity": "mid"
+  "last_intensity": "mid",
+  "sent": {
+    "2026-06-22": {
+      "recovery": {
+        "name": "恢复提醒",
+        "scheduled_time": "21:00",
+        "sent_at": "2026-06-22T21:05:47+08:00"
+      }
+    }
+  }
 }
