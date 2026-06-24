@@ -10,7 +10,8 @@ import requests
 
 SHANGHAI_TZ = datetime.timezone(datetime.timedelta(hours=8), "Asia/Shanghai")
 STATE_FILE = Path("state.json")
-WINDOW_MINUTES = 15
+EARLY_WINDOW_MINUTES = 60
+LATE_WINDOW_MINUTES = 60
 PUSHPLUS_TITLE = "每日健身提醒"
 
 REMINDERS = [
@@ -123,7 +124,7 @@ def seconds_from_target(reminder, now):
 
 def is_in_schedule_window(reminder, now):
     delta = seconds_from_target(reminder, now)
-    return -WINDOW_MINUTES * 60 <= delta < (WINDOW_MINUTES + 1) * 60
+    return -EARLY_WINDOW_MINUTES * 60 <= delta <= LATE_WINDOW_MINUTES * 60
 
 
 def is_send_time(reminder, now):
@@ -253,7 +254,10 @@ def main():
     print("Manual reminder:", os.getenv("MANUAL_REMINDER", "<none>") or "<none>")
 
     if not reminder:
-        print(f"⏭️ No reminder due within ±{WINDOW_MINUTES} minutes; skipping.")
+        print(
+            "⏭️ No reminder due within "
+            f"-{EARLY_WINDOW_MINUTES}/+{LATE_WINDOW_MINUTES} minutes; skipping."
+        )
         return
 
     print(f"Reminder: {reminder['name']} ({reminder['time']})")

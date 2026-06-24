@@ -17,23 +17,9 @@ on:
           - recovery
 
   schedule:
-    # 08:30 Shanghai, valid window 08:15-08:45
-    - cron: "15-45/5 0 * * *"
-
-    # 12:00 Shanghai, valid window 11:45-12:15
-    - cron: "45-55/5 3 * * *"
-    - cron: "0-15/5 4 * * *"
-
-    # 15:30 Shanghai, valid window 15:15-15:45
-    - cron: "15-45/5 7 * * *"
-
-    # 18:00 Shanghai, valid window 17:45-18:15
-    - cron: "45-55/5 9 * * *"
-    - cron: "0-15/5 10 * * *"
-
-    # 21:00 Shanghai, valid window 20:45-21:15
-    - cron: "45-55/5 12 * * *"
-    - cron: "0-15/5 13 * * *"
+    # Probe every 5 minutes from 07:00-22:55 Shanghai.
+    # main.py waits if it starts early and catches up if GitHub starts late.
+    - cron: "*/5 23,0-14 * * *"
 
 permissions:
   contents: write
