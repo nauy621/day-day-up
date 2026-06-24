@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -111,10 +112,38 @@ def target_minutes(reminder):
     return int(hour) * 60 + int(minute)
 
 
-def find_due_reminder(now):
-    current = minutes_since_midnight(now)
+def target_datetime(reminder, now):
+    hour, minute = reminder["time"].split(":")
+    return now.replace(hour=int(hour), minute=int(minute), second=0, microsecond=0)
+
+
+def seconds_from_target(reminder, now):
+    return int((now - target_datetime(reminder, now)).total_seconds())
+
+
+def is_in_schedule_window(reminder, now):
+    delta = seconds_from_target(reminder, now)
+    return -WINDOW_MINUTES * 60 <= delta < (WINDOW_MINUTES + 1) * 60
+
+
+def is_send_time(reminder, now):
+    return is_in_schedule_window(reminder, now) and seconds_from_target(reminder, now) >= 0
+
+
+def seconds_until_target(reminder, now):
+    return max(0, int((target_datetime(reminder, now) - now).total_seconds()))
+
+
+def select_scheduled_reminder(now):
     for reminder in REMINDERS:
-        if abs(current - target_minutes(reminder)) <= WINDOW_MINUTES:
+        if is_in_schedule_window(reminder, now):
+            return reminder
+    return None
+
+
+def find_due_reminder(now):
+    for reminder in REMINDERS:
+        if is_send_time(reminder, now):
             return reminder
     return None
 
@@ -200,7 +229,7 @@ def select_reminder(now):
 
     if event_name == "workflow_dispatch" or manual_choice:
         return get_manual_reminder(manual_choice)
-    return find_due_reminder(now)
+    return select_scheduled_reminder(now)
 
 
 def send_pushplus(token, reminder):
@@ -217,7 +246,6 @@ def send_pushplus(token, reminder):
 
 def main():
     now = get_now()
-    state = load_state()
     reminder = select_reminder(now)
 
     print("Shanghai time:", now.strftime("%Y-%m-%d %H:%M:%S"))
@@ -229,6 +257,21 @@ def main():
         return
 
     print(f"Reminder: {reminder['name']} ({reminder['time']})")
+
+    if should_persist_state(reminder):
+        wait_seconds = seconds_until_target(reminder, now)
+        if wait_seconds > 0:
+            target = target_datetime(reminder, now)
+            print(
+                "Waiting until target time:",
+                target.strftime("%Y-%m-%d %H:%M:%S"),
+                f"({wait_seconds}s)",
+            )
+            time.sleep(wait_seconds)
+            now = get_now()
+            print("Shanghai time after wait:", now.strftime("%Y-%m-%d %H:%M:%S"))
+
+    state = load_state()
 
     if was_sent_today(state, reminder, now):
         print(f"⏭️ {reminder['name']} already sent today; skipping duplicate.")
