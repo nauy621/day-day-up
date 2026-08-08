@@ -12,7 +12,6 @@ on:
           - test
           - breakfast
           - lunch
-          - snack
           - workout
           - recovery
 
