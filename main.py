@@ -7,10 +7,17 @@ from pathlib import Path
 
 import requests
 
-SHANGHAI_TZ = datetime.timezone(datetime.timedelta(hours=8), "Asia/Shanghai")
+
+SHANGHAI_TZ = datetime.timezone(
+    datetime.timedelta(hours=8),
+    "Asia/Shanghai"
+)
+
 STATE_FILE = Path("state.json")
+
 EARLY_WINDOW_MINUTES = 60
 LATE_WINDOW_MINUTES = 60
+
 PUSHPLUS_TITLE = "每日健身提醒"
 
 
@@ -32,6 +39,7 @@ REMINDERS = [
 🥟 巴比菜包可以吃3个
 """,
     },
+
     {
         "key": "lunch",
         "time": "12:00",
@@ -41,12 +49,14 @@ REMINDERS = [
 🥗 超级碗瓦坎达轻食
 """,
     },
+
     {
         "key": "workout",
         "time": "18:00",
         "name": "训练提醒",
         "content": "",
     },
+
     {
         "key": "recovery",
         "time": "21:00",
@@ -142,12 +152,16 @@ def get_workout_content(weekday):
 def parse_shanghai_time(value):
     value = value.strip()
 
-    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+    for fmt in (
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d %H:%M:%S",
+    ):
         try:
             return datetime.datetime.strptime(
                 value,
                 fmt
             ).replace(tzinfo=SHANGHAI_TZ)
+
         except ValueError:
             pass
 
@@ -245,19 +259,32 @@ def find_due_reminder(now):
 def get_manual_reminder(choice):
     choice = (choice or "test").strip()
 
-    if choice in ("", "test", "manual-test"):
+    if choice in (
+        "",
+        "test",
+        "manual-test",
+    ):
         return MANUAL_TEST_REMINDER
 
     for reminder in REMINDERS:
         if reminder["key"] == choice:
+
             manual_reminder = dict(reminder)
+
             manual_reminder["manual"] = True
-            manual_reminder["key"] = f"manual-{reminder['key']}"
+
+            manual_reminder["key"] = (
+                f"manual-{reminder['key']}"
+            )
 
             return manual_reminder
 
     valid = ", ".join(
-        ["test"] + [reminder["key"] for reminder in REMINDERS]
+        ["test"]
+        + [
+            reminder["key"]
+            for reminder in REMINDERS
+        ]
     )
 
     raise ValueError(
@@ -266,4 +293,346 @@ def get_manual_reminder(choice):
     )
 
 
-def should_persist_state(rem
+def should_persist_state(reminder):
+    return not reminder.get("manual", False)
+
+
+def load_state(path=STATE_FILE):
+    if not path.exists():
+        return {"sent": {}}
+
+    try:
+        with path.open(
+            "r",
+            encoding="utf-8"
+        ) as f:
+            state = json.load(f)
+
+    except (
+        json.JSONDecodeError,
+        OSError,
+    ) as exc:
+
+        print(
+            f"⚠️ Failed to read {path}: "
+            f"{exc}; starting with empty state"
+        )
+
+        return {"sent": {}}
+
+    if not isinstance(state, dict):
+        return {"sent": {}}
+
+    if not isinstance(
+        state.get("sent"),
+        dict
+    ):
+        state["sent"] = {}
+
+    return state
+
+
+def save_state(
+    state,
+    path=STATE_FILE
+):
+    with path.open(
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            state,
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+        f.write("\n")
+
+
+def state_day(now):
+    return now.strftime("%Y-%m-%d")
+
+
+def was_sent_today(
+    state,
+    reminder,
+    now
+):
+    if not should_persist_state(reminder):
+        return False
+
+    return (
+        reminder["key"]
+        in state.get(
+            "sent",
+            {}
+        ).get(
+            state_day(now),
+            {}
+        )
+    )
+
+
+def mark_sent(
+    state,
+    reminder,
+    now
+):
+    day = state_day(now)
+
+    state.setdefault(
+        "sent",
+        {}
+    ).setdefault(
+        day,
+        {}
+    )[reminder["key"]] = {
+        "name": reminder["name"],
+        "scheduled_time": reminder["time"],
+        "sent_at": now.isoformat(
+            timespec="seconds"
+        ),
+    }
+
+
+def get_token():
+    token = os.getenv(
+        "PUSHPLUS_TOKEN"
+    )
+
+    if token:
+        return token
+
+    try:
+        with open(
+            "config.json",
+            "r",
+            encoding="utf-8",
+        ) as f:
+            return json.load(f).get(
+                "pushplus_token"
+            )
+
+    except FileNotFoundError:
+        return None
+
+
+def select_reminder(now):
+    event_name = os.getenv(
+        "GITHUB_EVENT_NAME",
+        "",
+    )
+
+    manual_choice = os.getenv(
+        "MANUAL_REMINDER",
+        "",
+    )
+
+    if (
+        event_name == "workflow_dispatch"
+        or manual_choice
+    ):
+        return get_manual_reminder(
+            manual_choice
+        )
+
+    return select_scheduled_reminder(now)
+
+
+def send_pushplus(
+    token,
+    reminder
+):
+    return requests.get(
+        "https://www.pushplus.plus/send",
+        params={
+            "token": token,
+            "title": PUSHPLUS_TITLE,
+            "content": reminder["content"],
+        },
+        timeout=15,
+    )
+
+
+def main():
+    now = get_now()
+
+    reminder = select_reminder(now)
+
+    # 18:00训练提醒：
+    # 根据当天星期自动选择训练内容
+    if (
+        reminder
+        and reminder["key"]
+        in (
+            "workout",
+            "manual-workout",
+        )
+    ):
+        reminder = dict(reminder)
+
+        reminder["content"] = (
+            get_workout_content(
+                now.weekday()
+            )
+        )
+
+    print(
+        "Shanghai time:",
+        now.strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ),
+    )
+
+    print(
+        "Event:",
+        os.getenv(
+            "GITHUB_EVENT_NAME",
+            "<local>"
+        ),
+    )
+
+    print(
+        "Manual reminder:",
+        os.getenv(
+            "MANUAL_REMINDER",
+            "<none>"
+        ) or "<none>",
+    )
+
+    if not reminder:
+
+        print(
+            "⏭️ No reminder due within "
+            f"-{EARLY_WINDOW_MINUTES}/"
+            f"+{LATE_WINDOW_MINUTES} "
+            "minutes; skipping."
+        )
+
+        return
+
+    print(
+        f"Reminder: "
+        f"{reminder['name']} "
+        f"({reminder['time']})"
+    )
+
+    if should_persist_state(reminder):
+
+        wait_seconds = (
+            seconds_until_target(
+                reminder,
+                now
+            )
+        )
+
+        if wait_seconds > 0:
+
+            target = target_datetime(
+                reminder,
+                now
+            )
+
+            print(
+                "Waiting until target time:",
+                target.strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                f"({wait_seconds}s)",
+            )
+
+            time.sleep(wait_seconds)
+
+            now = get_now()
+
+            print(
+                "Shanghai time after wait:",
+                now.strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+            )
+
+    state = load_state()
+
+    if was_sent_today(
+        state,
+        reminder,
+        now
+    ):
+        print(
+            f"⏭️ {reminder['name']} "
+            "already sent today; "
+            "skipping duplicate."
+        )
+
+        return
+
+    token = get_token()
+
+    if not token:
+        print(
+            "❌ Missing PUSHPLUS_TOKEN"
+        )
+
+        sys.exit(1)
+
+    response = send_pushplus(
+        token,
+        reminder
+    )
+
+    print(
+        "STATUS:",
+        response.status_code
+    )
+
+    print(
+        "RESPONSE:",
+        response.text
+    )
+
+    response.raise_for_status()
+
+    try:
+        data = response.json()
+
+    except ValueError:
+        data = {}
+
+    if data.get("code") not in (
+        200,
+        "200",
+        None,
+    ):
+        print(
+            "❌ PushPlus returned an error"
+        )
+
+        sys.exit(1)
+
+    if should_persist_state(reminder):
+
+        mark_sent(
+            state,
+            reminder,
+            now
+        )
+
+        save_state(state)
+
+        print(
+            "State updated:",
+            STATE_FILE
+        )
+
+    else:
+        print(
+            "Manual reminder sent; "
+            "state not updated."
+        )
+
+
+if __name__ == "__main__":
+    main()
